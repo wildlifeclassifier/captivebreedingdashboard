@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Captive Breeding Priority Scoring System</title>
+<style>
+  :root {
+    --accent: #C1502E; --accent-dark: #8C3A1F; --accent-soft: #E58E6D;
+    --bg: #f4f4f4; --card: #ffffff; --text: #333;
+  }
+  * { box-sizing: border-box; }
+  body {
+    background: var(--bg); color: var(--text); margin: 0;
+    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  }
+  header { background: #fff; padding: 16px 28px; border-bottom: 4px solid var(--accent); }
+  header h1 { margin: 0; font-size: 26px; }
+  header p { margin: 2px 0 0; color: #666; }
+  .wrap { display: flex; gap: 18px; padding: 18px 22px; align-items: flex-start; }
+  .sidebar { width: 300px; flex-shrink: 0; }
+  .main { flex: 1; min-width: 0; }
+  .card {
+    background: var(--card); border-radius: 10px; padding: 16px 18px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 16px;
+  }
+  .card h3 { margin: 0 0 4px; font-size: 16px; }
+  .card h3 em { font-weight: normal; }
+  .sub { font-size: 11.5px; color: #888; margin: 0 0 8px; }
+  .wgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 14px; }
+  .wctl label { font-size: 13px; font-weight: bold; display: flex; justify-content: space-between; }
+  .wctl label span.val {
+    background: var(--accent); color: #fff; border-radius: 4px;
+    padding: 0 6px; font-size: 12px; line-height: 18px;
+  }
+  input[type=range] { width: 100%; accent-color: var(--accent); }
+  select {
+    width: 100%; padding: 9px; border-radius: 8px; border: 1px solid #ddd;
+    font-size: 14px; background: #fff;
+  }
+  .taxa-opts label { display: block; font-size: 14px; margin: 3px 0; }
+  .taxa-opts input { accent-color: var(--accent); }
+  button {
+    background: var(--accent); color: #fff; border: none; border-radius: 20px;
+    padding: 10px 20px; font-weight: bold; cursor: pointer;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+  }
+  button:hover { background: #D96E45; }
+  .cols { display: flex; gap: 16px; flex-wrap: wrap; }
+  .rrow { display: flex; align-items: center; gap: 8px; margin: 2px 0; cursor: pointer; }
+  .rrow .lbl { width: 210px; text-align: right; font-style: italic; font-size: 12px;
+               white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .rrow .track { flex: 1; background: #f0f0f0; border-radius: 3px; height: 16px; }
+  .rrow .bar { height: 16px; border-radius: 3px; background: var(--accent); transition: width .15s; }
+  .rrow.sel .bar { background: var(--accent-dark); }
+  .rrow.sel .lbl { font-weight: bold; }
+  .rrow .sc { width: 44px; font-size: 12px; color: #666; }
+  .stack { display: flex; height: 34px; border-radius: 6px; overflow: hidden; margin: 6px 0 10px; }
+  .stack div { transition: width .15s; }
+  .legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; }
+  .legend span::before {
+    content: ""; display: inline-block; width: 11px; height: 11px;
+    border-radius: 2px; margin-right: 5px; background: var(--sw); vertical-align: -1px;
+  }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { padding: 6px 9px; text-align: left; border-bottom: 1px solid #eee; }
+  th { background: #fafafa; position: sticky; top: 0; }
+  tr:hover td { background: #fdf3ee; }
+  .tablebox { max-height: 420px; overflow: auto; border-radius: 8px; }
+  .metric { font-size: 14px; color: #666; }
+  .metric b { font-size: 22px; color: var(--text); display: block; }
+  svg text { font-family: inherit; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Captive Breeding Priority Scoring System</h1>
+  <p>National Center for Wildlife — standalone edition</p>
+</header>
+
+<div class="wrap">
+  <div class="sidebar">
+    <div class="card">
+      <h3>Weights</h3>
+      <p class="sub">Relative shares; normalized internally. All at 1 = equal weighting.</p>
+      <div class="wgrid" id="weights"></div>
+    </div>
+    <div class="card">
+      <h3>Taxa</h3>
+      <div class="taxa-opts" id="taxa"></div>
+    </div>
+    <div class="card">
+      <h3>Species</h3>
+      <select id="speciesSel"></select>
+      <div class="metric" style="margin-top:12px">
+        Current rank <b id="rankMetric">—</b>
+      </div>
+    </div>
+    <div class="card">
+      <button id="dl">Download ranked CSV</button>
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="cols">
+      <div class="card" style="flex:1.2;min-width:380px">
+        <h3>Species Ranking</h3>
+        <p class="sub">Weighted composite of standardized criteria. Click a bar to inspect that species.</p>
+        <div id="ranking"></div>
+      </div>
+      <div style="flex:1;min-width:360px">
+        <div class="card">
+          <h3>Criterion Signature — <em id="sigName"></em></h3>
+          <p class="sub">Species profile on the standardized 0–1 scale (e.g., IUCN 0–6 → 0–1).
+             Hollow markers: mean of the currently filtered pool.</p>
+          <svg id="signature" width="100%" height="248" viewBox="0 0 460 248"></svg>
+        </div>
+        <div class="card">
+          <h3>Rank Sensitivity — <em id="sensName"></em></h3>
+          <p class="sub">Δ rank if each dial is moved one notch (±0.5) from its <b>current</b> position —
+             a local derivative, re-evaluated as weights change. Sorted most → least sensitive.</p>
+          <svg id="sensitivity" width="100%" height="262" viewBox="0 0 460 262"></svg>
+        </div>
+        <div class="card">
+          <h3>Risk Composition — <em id="compName"></em></h3>
+          <p class="sub">Share of this species' composite score contributed by each criterion under current weights.</p>
+          <div class="stack" id="stack"></div>
+          <div class="legend" id="legend"></div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <h3>Full ranking (<span id="count"></span> species)</h3>
+      <div class="tablebox"><table id="tbl"></table></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const DATA = [{"taxa": "Mammals", "common": "Arabian oryx", "latin": "Oryx leucoryx", "raw": {"iucn_status": "Vulnerable (VU)", "population_state": "High Risk (<2500)", "trend_distribution": "Medium", "husbandry_potential": "High", "recovery_potential": "High", "genetic_viability": "High", "institutional_significance": "High"}, "n": {"iucn_status": 0.5, "population_state": 0.666667, "trend_distribution": 0.5, "husbandry_potential": 1.0, "recovery_potential": 1.0, "genetic_viability": 1.0, "institutional_significance": 1.0}}, {"taxa": "Mammals", "common": "Nubian ibex", "latin": "Capra nubiana", "raw": {"iucn_status": "Vulnerable (VU)", "population_state": "High Risk (<2500)", "trend_distribution": "Medium", "husbandry_potential": "High", "recovery_potential": "High", "genetic_viability": "High", "institutional_significance": "High"}, "n": {"iucn_status": 0.5, "population_state": 0.666667, "trend_distribution": 0.5, "husbandry_potential": 1.0, "recovery_potential": 1.0, "genetic_viability": 1.0, "institutional_significance": 1.0}}, {"taxa": "Mammals", "common": "Arabian gazelle", "latin": "Gazella arabica", "raw": {"iucn_status": "Vulnerable (VU)", "population_state": "Vulnerable (<10000)", "trend_distribution": "Medium", "husbandry_potential": "High", "recovery_potential": "High", "genetic_viability": "Medium", "institutional_significance": "High"}, "n": {"iucn_status": 0.5, "population_state": 0.333333, "trend_distribution": 0.5, "husbandry_potential": 1.0, "recovery_potential": 1.0, "genetic_viability": 0.5, "institutional_significance": 1.0}}, {"taxa": "Mammals", "common": "Neumann gazelle", "latin": "Gazella erlangeri", "raw": {"iucn_status": "Not Evaluated (NE)", "population_state": "Extreme Risk (<250)", "trend_distribution": "Low", "husbandry_potential": "Low", "recovery_potential": "Low", "genetic_viability": "Low", "institutional_significance": "High"}, "n": {"iucn_status": 0.166667, "population_state": 1.0, "trend_distribution": 0.0, "husbandry_potential": 0.0, "recovery_potential": 0.0, "genetic_viability": 0.0, "institutional_significance": 1.0}}, {"taxa": "Mammals", "common": "Brandt's Hedgehog", "latin": "Paraechinus hypomelas", "raw": {"iucn_status": "Least Concern (LC)", "population_state": "Vulnerable (<10000)", "trend_distribution": "Medium", "husbandry_potential": "Low", "recovery_potential": "Low", "genetic_viability": "Low", "institutional_significance": "Medium"}, "n": {"iucn_status": 0.0, "population_state": 0.333333, "trend_distribution": 0.5, "husbandry_potential": 0.0, "recovery_potential": 0.0, "genetic_viability": 0.0, "institutional_significance": 0.5}}, {"taxa": "Mammals", "common": "Straw-colored Fruit Bat", "latin": "Eidolon helvum", "raw": {"iucn_status": "Near Threatened (NT)", "population_state": "Least Concern (>10000)", "trend_distribution": "Medium", "husbandry_potential": "Medium", "recovery_potential": "High", "genetic_viability": "Medium", "institutional_significance": "Low"}, "n": {"iucn_status": 0.333333, "population_state": 0.0, "trend_distribution": 0.5, "husbandry_potential": 0.5, "recovery_potential": 1.0, "genetic_viability": 0.5, "institutional_significance": 0.0}}, {"taxa": "Mammals", "common": "Ethiopian Epauletted Fruit Bat", "latin": "Epomophorus labiatus", "raw": {"iucn_status": "Data Deficient (DD)", "population_state": "High Risk (<2500)", "trend_distribution": "Medium", "husbandry_potential": "Medium", "recovery_potential": "High", "genetic_viability": "Low", "institutional_significance": "Low"}, "n": {"iucn_status": 0.166667, "population_state": 0.666667, "trend_distribution": 0.5, "husbandry_potential": 0.5, "recovery_potential": 1.0, "genetic_viability": 0.0, "institutional_significance": 0.0}}, {"taxa": "Mammals", "common": "Sand Gazelle", "latin": "Gazella marica", "raw": {"iucn_status": "Vulnerable (VU)", "population_state": "High Risk (<2500)", "trend_distribution": "High", "husbandry_potential": "High", "recovery_potential": "High", "genetic_viability": "High", "institutional_significance": "High"}, "n": {"iucn_status": 0.5, "population_state": 0.666667, "trend_distribution": 1.0, "husbandry_potential": 1.0, "recovery_potential": 1.0, "genetic_viability": 1.0, "institutional_significance": 1.0}}, {"taxa": "Mammals", "common": "Farasan gazelle", "latin": "Gazella arabica farasani", "raw": {"iucn_status": "Vulnerable (VU)", "population_state": "High Risk (<2500)", "trend_distribution": "Low", "husbandry_potential": "High", "recovery_potential": "High", "genetic_viability": "High", "institutional_significance": "High"}, "n": {"iucn_status": 0.5, "population_state": 0.666667, "trend_distribution": 0.0, "husbandry_potential": 1.0, "recovery_potential": 1.0, "genetic_viability": 1.0, "institutional_significance": 1.0}}, {"taxa": "Mammals", "common": "Gray Wolf", "latin": "Canis lupus", "raw": {"iucn_status": "Vulnerable (VU)", "population_state": "Least Concern (>10000)", "trend_distribution": "Medium", "husbandry_potential": "Medium", "recovery_potential": "High", "genetic_viability": "Low", "institutional_significance": "High"}, "n": {"iucn_status": 0.5, "population_state": 0.0, "trend_distribution": 0.5, "husbandry_potential": 0.5, "recovery_potential": 1.0, "genetic_viability": 0.0, "institutional_significance": 1.0}}, {"taxa": "Mammals", "common": "African Wildcat", "latin": "Felis lybica", "raw": {"iucn_status": "Near Threatened (NT)", "population_state": "Vulnerable (<10000)", "trend_distribution": "Medium", "husbandry_potential": "Medium", "recovery_potential": "Medium", "genetic_viability": "Low", "institutional_significance": "Medium"}, "n": {"iucn_status": 0.333333, "population_state": 0.333333, "trend_distribution": 0.5, "husbandry_potential": 0.5, "recovery_potential": 0.5, "genetic_viability": 0.0, "institutional_significance": 0.5}}, {"taxa": "Mammals", "common": "Sand Cat", "latin": "Felis margarita", "raw": {"iucn_status": "Vulnerable (VU)", "population_state": "Vulnerable (<10000)", "trend_distribution": "Medium", "husbandry_potential": "Medium", "recovery_potential": "Medium", "genetic_viability": "Medium", "institutional_significance": "High"}, "n": {"iucn_status": 0.5, "population_state": 0.333333, "trend_distribution": 0.5, "husbandry_potential": 0.5, "recovery_potential": 0.5, "genetic_viability": 0.5, "institutional_significance": 1.0}}, {"taxa": "Mammals", "common": "Striped Hyena", "latin": "Hyaena hyaena", "raw": {"iucn_status": "Vulnerable (VU)", "population_state": "Vulnerable (<10000)", "trend_distribution": "Low", "husbandry_potential": "High", "recovery_potential": "High", "genetic_viability": "High", "institutional_significance": "High"}, "n": {"iucn_status": 0.5, "population_state": 0.333333, "trend_distribution": 0.0, "husbandry_potential": 1.0, "recovery_potential": 1.0, "genetic_viability": 1.0, "institutional_significance": 1.0}}, {"taxa": "Mammals", "common": "White-tailed Mongoose", "latin": "Ichneumia albicauda", "raw": {"iucn_status": "Least Concern (LC)", "population_state": "Least Concern (>10000)", "trend_distribution": "Low", "husbandry_potential": "High", "recovery_potential": "High", "genetic_viability": "High", "institutional_significance": "Low"}, "n": {"iucn_status": 0.0, "population_state": 0.0, "trend_distribution": 0.0, "husbandry_potential": 1.0, "recovery_potential": 1.0, "genetic_viability": 1.0, "institutional_significance": 0.0}}, {"taxa": "Mammals", "common": "Honey Badger", "latin": "Mellivora capensis", "raw": {"iucn_status": "Near Threatened (NT)", "population_state": "Vulnerable (<10000)", "trend_distribution": "Low", "husbandry_potential": "Medium", "recovery_potential": "High", "genetic_viability": "Low", "institutional_significance": "Low"}, "n": {"iucn_status": 0.333333, "population_state": 0.333333, "trend_distribution": 0.0, "husbandry_potential": 0.5, "recovery_potential": 1.0, "genetic_viability": 0.0, "institutional_significance": 0.0}}, {"taxa": "Mammals", "common": "Cheetah", "latin": "Acinonyx jubatus", "raw": {"iucn_status": "Extinct in the Wild (EW)", "population_state": "Extreme Risk (<250)", "trend_distribution": "Medium", "husbandry_potential": "High", "recovery_potential": "High", "genetic_viability": "High", "institutional_significance": "High"}, "n": {"iucn_status": 1.0, "population_state": 1.0, "trend_distribution": 0.5, "husbandry_potential": 1.0, "recovery_potential": 1.0, "genetic_viability": 1.0, "institutional_significance": 1.0}}, {"taxa": "Mammals", "common": "Cape Hare", "latin": "Lepus capensis", "raw": {"iucn_status": "Near Threatened (NT)", "population_state": "Vulnerable (<10000)", "trend_distribution": "Medium", "husbandry_potential": "High", "recovery_potential": "Medium", "genetic_viability": "Low", "institutional_significance": "High"}, "n": {"iucn_status": 0.333333, "population_state": 0.333333, "trend_distribution": 0.5, "husbandry_potential": 1.0, "recovery_potential": 0.5, "genetic_viability": 0.0, "institutional_significance": 1.0}}, {"taxa": "Mammals", "common": "Indian Crested Porcupine", "latin": "Hystrix indica", "raw": {"iucn_status": "Least Concern (LC)", "population_state": "Least Concern (>10000)", "trend_distribution": "Low", "husbandry_potential": "Low", "recovery_potential": "Medium", "genetic_viability": "Low", "institutional_significance": "High"}, "n": {"iucn_status": 0.0, "population_state": 0.0, "trend_distribution": 0.0, "husbandry_potential": 0.0, "recovery_potential": 0.5, "genetic_viability": 0.0, "institutional_significance": 1.0}}, {"taxa": "Mammals", "common": "Arabian Leopard", "latin": "Panthera pardus nimr", "raw": {"iucn_status": "Critically Endangered (CR)", "population_state": "Extreme Risk (<250)", "trend_distribution": "High", "husbandry_potential": "High", "recovery_potential": "High", "genetic_viability": "High", "institutional_significance": "High"}, "n": {"iucn_status": 0.833333, "population_state": 1.0, "trend_distribution": 1.0, "husbandry_potential": 1.0, "recovery_potential": 1.0, "genetic_viability": 1.0, "institutional_significance": 1.0}}, {"taxa": "Mammals", "common": "Caracal", "latin": "Caracal caracal", "raw": {"iucn_status": "Least Concern (LC)", "population_state": "Vulnerable (<10000)", "trend_distribution": "Medium", "husbandry_potential": "High", "recovery_potential": "High", "genetic_viability": "High", "institutional_significance": "High"}, "n": {"iucn_status": 0.0, "population_state": 0.333333, "trend_distribution": 0.5, "husbandry_potential": 1.0, "recovery_potential": 1.0, "genetic_viability": 1.0, "institutional_significance": 1.0}}, {"taxa": "Mammals", "common": "Golden Jackal", "latin": "Canis aureus", "raw": {"iucn_status": "Least Concern (LC)", "population_state": "Extreme Risk (<250)", "trend_distribution": "Medium", "husbandry_potential": "Medium", "recovery_potential": "Medium", "genetic_viability": "High", "institutional_significance": "Medium"}, "n": {"iucn_status": 0.0, "population_state": 1.0, "trend_distribution": 0.5, "husbandry_potential": 0.5, "recovery_potential": 0.5, "genetic_viability": 1.0, "institutional_significance": 0.5}}, {"taxa": "Mammals", "common": "Blanford's Fox", "latin": "Vulpes cana", "raw": {"iucn_status": "Vulnerable (VU)", "population_state": "High Risk (<2500)", "trend_distribution": "Medium", "husbandry_potential": "Medium", "recovery_potential": "Medium", "genetic_viability": "Medium", "institutional_significance": "Medium"}, "n": {"iucn_status": 0.5, "population_state": 0.666667, "trend_distribution": 0.5, "husbandry_potential": 0.5, "recovery_potential": 0.5, "genetic_viability": 0.5, "institutional_significance": 0.5}}, {"taxa": "Mammals", "common": "Rock Hyrax", "latin": "Procavia capensis", "raw": {"iucn_status": "Least Concern (LC)", "population_state": "Least Concern (>10000)", "trend_distribution": "Medium", "husbandry_potential": "High", "recovery_potential": "High", "genetic_viability": "High", "institutional_significance": "High"}, "n": {"iucn_status": 0.0, "population_state": 0.0, "trend_distribution": 0.5, "husbandry_potential": 1.0, "recovery_potential": 1.0, "genetic_viability": 1.0, "institutional_significance": 1.0}}, {"taxa": "Mammals", "common": "Euphrates Jerboa", "latin": "Scarturus euphratica", "raw": {"iucn_status": "Near Threatened (NT)", "population_state": "Vulnerable (<10000)", "trend_distribution": "High", "husbandry_potential": "High", "recovery_potential": "Low", "genetic_viability": "Low", "institutional_significance": "High"}, "n": {"iucn_status": 0.333333, "population_state": 0.333333, "trend_distribution": 1.0, "husbandry_potential": 1.0, "recovery_potential": 0.0, "genetic_viability": 0.0, "institutional_significance": 1.0}}, {"taxa": "Mammals", "common": "Syrian wild ass", "latin": "Equus hemionus", "raw": {"iucn_status": "Extinct in the Wild (EW)", "population_state": "Extreme Risk (<250)", "trend_distribution": "High", "husbandry_potential": "High", "recovery_potential": "High", "genetic_viability": "High", "institutional_significance": "High"}, "n": {"iucn_status": 1.0, "population_state": 1.0, "trend_distribution": 1.0, "husbandry_potential": 1.0, "recovery_potential": 1.0, "genetic_viability": 1.0, "institutional_significance": 1.0}}, {"taxa": "Birds", "common": "Lanner Falcon", "latin": "Falco biarmicus", "raw": {"iucn_status": "Critically Endangered (CR)", "population_state": "Extreme Risk (<250)", "trend_distribution": "Medium", "husbandry_potential": "Low", "recovery_potential": "Medium", "genetic_viability": "High", "institutional_significance": "High"}, "n": {"iucn_status": 0.833333, "population_state": 1.0, "trend_distribution": 0.5, "husbandry_potential": 0.0, "recovery_potential": 0.5, "genetic_viability": 1.0, "institutional_significance": 1.0}}, {"taxa": "Birds", "common": "Arabian Bustard", "latin": "Ardeotis arabs", "raw": {"iucn_status": "Critically Endangered (CR)", "population_state": "Extreme Risk (<250)", "trend_distribution": "Medium", "husbandry_potential": "Medium", "recovery_potential": "Medium", "genetic_viability": "Low", "institutional_significance": "High"}, "n": {"iucn_status": 0.833333, "population_state": 1.0, "trend_distribution": 0.5, "husbandry_potential": 0.5, "recovery_potential": 0.5, "genetic_viability": 0.0, "institutional_significance": 1.0}}, {"taxa": "Birds", "common": "Common Ostrich", "latin": "Struthio camelus", "raw": {"iucn_status": "Extinct in the Wild (EW)", "population_state": "Extreme Risk (<250)", "trend_distribution": "Medium", "husbandry_potential": "Low", "recovery_potential": "Medium", "genetic_viability": "Low", "institutional_significance": "High"}, "n": {"iucn_status": 1.0, "population_state": 1.0, "trend_distribution": 0.5, "husbandry_potential": 0.0, "recovery_potential": 0.5, "genetic_viability": 0.0, "institutional_significance": 1.0}}, {"taxa": "Birds", "common": "Asir Magpie", "latin": "Pica asirensis", "raw": {"iucn_status": "Endangered (EN)", "population_state": "High Risk (<2500)", "trend_distribution": "High", "husbandry_potential": "High", "recovery_potential": "High", "genetic_viability": "High", "institutional_significance": "High"}, "n": {"iucn_status": 0.666667, "population_state": 0.666667, "trend_distribution": 1.0, "husbandry_potential": 1.0, "recovery_potential": 1.0, "genetic_viability": 1.0, "institutional_significance": 1.0}}, {"taxa": "Birds", "common": "Bearded Vulture", "latin": "Gypaetus barbatus", "raw": {"iucn_status": "Vulnerable (VU)", "population_state": "Extreme Risk (<250)", "trend_distribution": "Medium", "husbandry_potential": "Medium", "recovery_potential": "Medium", "genetic_viability": "Medium", "institutional_significance": "High"}, "n": {"iucn_status": 0.5, "population_state": 1.0, "trend_distribution": 0.5, "husbandry_potential": 0.5, "recovery_potential": 0.5, "genetic_viability": 0.5, "institutional_significance": 1.0}}, {"taxa": "Birds", "common": "Lappet-faced Vulture", "latin": "Torgos tracheliotos", "raw": {"iucn_status": "Vulnerable (VU)", "population_state": "High Risk (<2500)", "trend_distribution": "Medium", "husbandry_potential": "High", "recovery_potential": "Medium", "genetic_viability": "Medium", "institutional_significance": "High"}, "n": {"iucn_status": 0.5, "population_state": 0.666667, "trend_distribution": 0.5, "husbandry_potential": 1.0, "recovery_potential": 0.5, "genetic_viability": 0.5, "institutional_significance": 1.0}}, {"taxa": "Birds", "common": "Sooty Falcon", "latin": "Falco concolor", "raw": {"iucn_status": "Endangered (EN)", "population_state": "High Risk (<2500)", "trend_distribution": "Medium", "husbandry_potential": "Low", "recovery_potential": "Medium", "genetic_viability": "Low", "institutional_significance": "High"}, "n": {"iucn_status": 0.666667, "population_state": 0.666667, "trend_distribution": 0.5, "husbandry_potential": 0.0, "recovery_potential": 0.5, "genetic_viability": 0.0, "institutional_significance": 1.0}}, {"taxa": "Birds", "common": "Peregrine Falcon", "latin": "Falco pelegrinoides", "raw": {"iucn_status": "Vulnerable (VU)", "population_state": "Vulnerable (<10000)", "trend_distribution": "Medium", "husbandry_potential": "Low", "recovery_potential": "Medium", "genetic_viability": "Low", "institutional_significance": "High"}, "n": {"iucn_status": 0.5, "population_state": 0.333333, "trend_distribution": 0.5, "husbandry_potential": 0.0, "recovery_potential": 0.5, "genetic_viability": 0.0, "institutional_significance": 1.0}}, {"taxa": "Birds", "common": "Asian Houbara", "latin": "Chlamydotis macqueenii", "raw": {"iucn_status": "Critically Endangered (CR)", "population_state": "Least Concern (>10000)", "trend_distribution": "Medium", "husbandry_potential": "Medium", "recovery_potential": "Medium", "genetic_viability": "Low", "institutional_significance": "High"}, "n": {"iucn_status": 0.833333, "population_state": 0.0, "trend_distribution": 0.5, "husbandry_potential": 0.5, "recovery_potential": 0.5, "genetic_viability": 0.0, "institutional_significance": 1.0}}, {"taxa": "Birds", "common": "Golden Eagle", "latin": "Aquila chrysaetos", "raw": {"iucn_status": "Endangered (EN)", "population_state": "High Risk (<2500)", "trend_distribution": "Medium", "husbandry_potential": "High", "recovery_potential": "Low", "genetic_viability": "Medium", "institutional_significance": "Medium"}, "n": {"iucn_status": 0.666667, "population_state": 0.666667, "trend_distribution": 0.5, "husbandry_potential": 1.0, "recovery_potential": 0.0, "genetic_viability": 0.5, "institutional_significance": 0.5}}, {"taxa": "Birds", "common": "Helmeted Guineafowl", "latin": "Numida meleagris", "raw": {"iucn_status": "Vulnerable (VU)", "population_state": "Vulnerable (<10000)", "trend_distribution": "High", "husbandry_potential": "Low", "recovery_potential": "Medium", "genetic_viability": "Medium", "institutional_significance": "Medium"}, "n": {"iucn_status": 0.5, "population_state": 0.333333, "trend_distribution": 1.0, "husbandry_potential": 0.0, "recovery_potential": 0.5, "genetic_viability": 0.5, "institutional_significance": 0.5}}, {"taxa": "Birds", "common": "Egyptian Vulture", "latin": "Neophron percnopterus", "raw": {"iucn_status": "Vulnerable (VU)", "population_state": "Vulnerable (<10000)", "trend_distribution": "Medium", "husbandry_potential": "Medium", "recovery_potential": "Medium", "genetic_viability": "Medium", "institutional_significance": "High"}, "n": {"iucn_status": 0.5, "population_state": 0.333333, "trend_distribution": 0.5, "husbandry_potential": 0.5, "recovery_potential": 0.5, "genetic_viability": 0.5, "institutional_significance": 1.0}}, {"taxa": "Birds", "common": "Verreaux\u2019s Eagle", "latin": "Aquila verreauxii", "raw": {"iucn_status": "Endangered (EN)", "population_state": "Extreme Risk (<250)", "trend_distribution": "Medium", "husbandry_potential": "Medium", "recovery_potential": "Medium", "genetic_viability": "Medium", "institutional_significance": "Low"}, "n": {"iucn_status": 0.666667, "population_state": 1.0, "trend_distribution": 0.5, "husbandry_potential": 0.5, "recovery_potential": 0.5, "genetic_viability": 0.5, "institutional_significance": 0.0}}, {"taxa": "Birds", "common": "Arabian Woodpecker", "latin": "Dendropicos dorae", "raw": {"iucn_status": "Vulnerable (VU)", "population_state": "Least Concern (>10000)", "trend_distribution": "High", "husbandry_potential": "Medium", "recovery_potential": "High", "genetic_viability": "Medium", "institutional_significance": "High"}, "n": {"iucn_status": 0.5, "population_state": 0.0, "trend_distribution": 1.0, "husbandry_potential": 0.5, "recovery_potential": 1.0, "genetic_viability": 0.5, "institutional_significance": 1.0}}, {"taxa": "Birds", "common": "European Turtle-dove", "latin": "Streptopelia turtur", "raw": {"iucn_status": "Least Concern (LC)", "population_state": "Vulnerable (<10000)", "trend_distribution": "Medium", "husbandry_potential": "Low", "recovery_potential": "Medium", "genetic_viability": "Low", "institutional_significance": "High"}, "n": {"iucn_status": 0.0, "population_state": 0.333333, "trend_distribution": 0.5, "husbandry_potential": 0.0, "recovery_potential": 0.5, "genetic_viability": 0.0, "institutional_significance": 1.0}}, {"taxa": "Birds", "common": "Yemen Warbler", "latin": "Sylvia buryi", "raw": {"iucn_status": "Near Threatened (NT)", "population_state": "Least Concern (>10000)", "trend_distribution": "High", "husbandry_potential": "Low", "recovery_potential": "Medium", "genetic_viability": "Low", "institutional_significance": "High"}, "n": {"iucn_status": 0.333333, "population_state": 0.0, "trend_distribution": 1.0, "husbandry_potential": 0.0, "recovery_potential": 0.5, "genetic_viability": 0.0, "institutional_significance": 1.0}}, {"taxa": "Birds", "common": "Arabian Grosbeak", "latin": "Rhynchostruthus percivali", "raw": {"iucn_status": "Near Threatened (NT)", "population_state": "Least Concern (>10000)", "trend_distribution": "High", "husbandry_potential": "Low", "recovery_potential": "Medium", "genetic_viability": "Low", "institutional_significance": "High"}, "n": {"iucn_status": 0.333333, "population_state": 0.0, "trend_distribution": 1.0, "husbandry_potential": 0.0, "recovery_potential": 0.5, "genetic_viability": 0.0, "institutional_significance": 1.0}}, {"taxa": "Birds", "common": "Philby's partridge", "latin": "Alectoris philbyi", "raw": {"iucn_status": "Least Concern (LC)", "population_state": "Least Concern (>10000)", "trend_distribution": "Medium", "husbandry_potential": "Low", "recovery_potential": "Medium", "genetic_viability": "Low", "institutional_significance": "High"}, "n": {"iucn_status": 0.0, "population_state": 0.0, "trend_distribution": 0.5, "husbandry_potential": 0.0, "recovery_potential": 0.5, "genetic_viability": 0.0, "institutional_significance": 1.0}}, {"taxa": "Birds", "common": "Pin-tailed Sandgrouse", "latin": "Pterocles alchata", "raw": {"iucn_status": "Least Concern (LC)", "population_state": "Least Concern (>10000)", "trend_distribution": "Medium", "husbandry_potential": "Low", "recovery_potential": "Medium", "genetic_viability": "Low", "institutional_significance": "High"}, "n": {"iucn_status": 0.0, "population_state": 0.0, "trend_distribution": 0.5, "husbandry_potential": 0.0, "recovery_potential": 0.5, "genetic_viability": 0.0, "institutional_significance": 1.0}}, {"taxa": "Birds", "common": "Yemen Thrush", "latin": "Turdus menachensis", "raw": {"iucn_status": "Least Concern (LC)", "population_state": "Least Concern (>10000)", "trend_distribution": "Medium", "husbandry_potential": "Low", "recovery_potential": "Medium", "genetic_viability": "Low", "institutional_significance": "High"}, "n": {"iucn_status": 0.0, "population_state": 0.0, "trend_distribution": 0.5, "husbandry_potential": 0.0, "recovery_potential": 0.5, "genetic_viability": 0.0, "institutional_significance": 1.0}}, {"taxa": "Birds", "common": "Chukar", "latin": "Alectoris chukar", "raw": {"iucn_status": "Least Concern (LC)", "population_state": "Least Concern (>10000)", "trend_distribution": "High", "husbandry_potential": "High", "recovery_potential": "High", "genetic_viability": "Low", "institutional_significance": "High"}, "n": {"iucn_status": 0.0, "population_state": 0.0, "trend_distribution": 1.0, "husbandry_potential": 1.0, "recovery_potential": 1.0, "genetic_viability": 0.0, "institutional_significance": 1.0}}, {"taxa": "Birds", "common": "Sand Partridge", "latin": "Ammoperdix heyi", "raw": {"iucn_status": "Least Concern (LC)", "population_state": "Least Concern (>10000)", "trend_distribution": "Medium", "husbandry_potential": "Low", "recovery_potential": "Medium", "genetic_viability": "Low", "institutional_significance": "Medium"}, "n": {"iucn_status": 0.0, "population_state": 0.0, "trend_distribution": 0.5, "husbandry_potential": 0.0, "recovery_potential": 0.5, "genetic_viability": 0.0, "institutional_significance": 0.5}}, {"taxa": "Birds", "common": "Eurasian Thick-knee", "latin": "Burhinus oedicnemus", "raw": {"iucn_status": "Least Concern (LC)", "population_state": "Least Concern (>10000)", "trend_distribution": "Medium", "husbandry_potential": "Medium", "recovery_potential": "Medium", "genetic_viability": "Medium", "institutional_significance": "High"}, "n": {"iucn_status": 0.0, "population_state": 0.0, "trend_distribution": 0.5, "husbandry_potential": 0.5, "recovery_potential": 0.5, "genetic_viability": 0.5, "institutional_significance": 1.0}}, {"taxa": "Birds", "common": "Cream-colored Courser", "latin": "Cursorius cursor", "raw": {"iucn_status": "Least Concern (LC)", "population_state": "Least Concern (>10000)", "trend_distribution": "Medium", "husbandry_potential": "Medium", "recovery_potential": "Medium", "genetic_viability": "Medium", "institutional_significance": "Medium"}, "n": {"iucn_status": 0.0, "population_state": 0.0, "trend_distribution": 0.5, "husbandry_potential": 0.5, "recovery_potential": 0.5, "genetic_viability": 0.5, "institutional_significance": 0.5}}, {"taxa": "Birds", "common": "Chestnut-bellied Sandgrouse", "latin": "Pterocles exustus", "raw": {"iucn_status": "Least Concern (LC)", "population_state": "Least Concern (>10000)", "trend_distribution": "Medium", "husbandry_potential": "Low", "recovery_potential": "Medium", "genetic_viability": "Low", "institutional_significance": "High"}, "n": {"iucn_status": 0.0, "population_state": 0.0, "trend_distribution": 0.5, "husbandry_potential": 0.0, "recovery_potential": 0.5, "genetic_viability": 0.0, "institutional_significance": 1.0}}, {"taxa": "Birds", "common": "Lichtenstein\u2019s Sandgrouse", "latin": "Pterocles lichtensteinii", "raw": {"iucn_status": "Least Concern (LC)", "population_state": "Least Concern (>10000)", "trend_distribution": "Medium", "husbandry_potential": "Low", "recovery_potential": "Medium", "genetic_viability": "Low", "institutional_significance": "High"}, "n": {"iucn_status": 0.0, "population_state": 0.0, "trend_distribution": 0.5, "husbandry_potential": 0.0, "recovery_potential": 0.5, "genetic_viability": 0.0, "institutional_significance": 1.0}}, {"taxa": "Birds", "common": "Arabian Partridge", "latin": "Alectoris melanocephala", "raw": {"iucn_status": "Least Concern (LC)", "population_state": "Least Concern (>10000)", "trend_distribution": "Medium", "husbandry_potential": "Low", "recovery_potential": "Medium", "genetic_viability": "Low", "institutional_significance": "Medium"}, "n": {"iucn_status": 0.0, "population_state": 0.0, "trend_distribution": 0.5, "husbandry_potential": 0.0, "recovery_potential": 0.5, "genetic_viability": 0.0, "institutional_significance": 0.5}}, {"taxa": "Birds", "common": "See-see Partridge", "latin": "Ammoperdix griseogularis", "raw": {"iucn_status": "Least Concern (LC)", "population_state": "Least Concern (>10000)", "trend_distribution": "Medium", "husbandry_potential": "Low", "recovery_potential": "Medium", "genetic_viability": "High", "institutional_significance": "High"}, "n": {"iucn_status": 0.0, "population_state": 0.0, "trend_distribution": 0.5, "husbandry_potential": 0.0, "recovery_potential": 0.5, "genetic_viability": 1.0, "institutional_significance": 1.0}}, {"taxa": "R&A", "common": "Egyptian Spiny-tailed lizard", "latin": "Uromastyx aegyptia", "raw": {"iucn_status": "Vulnerable (VU)", "population_state": "Least Concern (>10000)", "trend_distribution": "High", "husbandry_potential": "High", "recovery_potential": "High", "genetic_viability": "High", "institutional_significance": "High"}, "n": {"iucn_status": 0.5, "population_state": 0.0, "trend_distribution": 1.0, "husbandry_potential": 1.0, "recovery_potential": 1.0, "genetic_viability": 1.0, "institutional_significance": 1.0}}, {"taxa": "R&A", "common": "Green Toad", "latin": "Bufotes sitibundus", "raw": {"iucn_status": "Least Concern (LC)", "population_state": "High Risk (<2500)", "trend_distribution": "Low", "husbandry_potential": "Medium", "recovery_potential": "Medium", "genetic_viability": "Medium", "institutional_significance": "Low"}, "n": {"iucn_status": 0.0, "population_state": 0.666667, "trend_distribution": 0.0, "husbandry_potential": 0.5, "recovery_potential": 0.5, "genetic_viability": 0.5, "institutional_significance": 0.0}}, {"taxa": "R&A", "common": "Arabian Helmeted Turtle", "latin": "Pelomedusa barbata", "raw": {"iucn_status": "Not Evaluated (NE)", "population_state": "High Risk (<2500)", "trend_distribution": "Low", "husbandry_potential": "Medium", "recovery_potential": "Medium", "genetic_viability": "Medium", "institutional_significance": "Low"}, "n": {"iucn_status": 0.166667, "population_state": 0.666667, "trend_distribution": 0.0, "husbandry_potential": 0.5, "recovery_potential": 0.5, "genetic_viability": 0.5, "institutional_significance": 0.0}}, {"taxa": "Fishes", "common": "Arabian Himri", "latin": "Carasobarbus apoensis", "raw": {"iucn_status": "Endangered (EN)", "population_state": "High Risk (<2500)", "trend_distribution": "Low", "husbandry_potential": "High", "recovery_potential": "High", "genetic_viability": "High", "institutional_significance": "High"}, "n": {"iucn_status": 0.666667, "population_state": 0.666667, "trend_distribution": 0.0, "husbandry_potential": 1.0, "recovery_potential": 1.0, "genetic_viability": 1.0, "institutional_significance": 1.0}}, {"taxa": "Fishes", "common": "Arabian shabout", "latin": "Arabibarbus arabicus", "raw": {"iucn_status": "Least Concern (LC)", "population_state": "High Risk (<2500)", "trend_distribution": "Low", "husbandry_potential": "High", "recovery_potential": "High", "genetic_viability": "Low", "institutional_significance": "High"}, "n": {"iucn_status": 0.0, "population_state": 0.666667, "trend_distribution": 0.0, "husbandry_potential": 1.0, "recovery_potential": 1.0, "genetic_viability": 0.0, "institutional_significance": 1.0}}, {"taxa": "Fishes", "common": "Arabian lotak", "latin": "Cyprinion acinaces", "raw": {"iucn_status": "Least Concern (LC)", "population_state": "Vulnerable (<10000)", "trend_distribution": "Low", "husbandry_potential": "High", "recovery_potential": "High", "genetic_viability": "Medium", "institutional_significance": "High"}, "n": {"iucn_status": 0.0, "population_state": 0.333333, "trend_distribution": 0.0, "husbandry_potential": 1.0, "recovery_potential": 1.0, "genetic_viability": 0.5, "institutional_significance": 1.0}}, {"taxa": "Fishes", "common": "Dawasir lotak", "latin": "Cyprinion mhalense", "raw": {"iucn_status": "Least Concern (LC)", "population_state": "Least Concern (>10000)", "trend_distribution": "Low", "husbandry_potential": "High", "recovery_potential": "High", "genetic_viability": "High", "institutional_significance": "High"}, "n": {"iucn_status": 0.0, "population_state": 0.0, "trend_distribution": 0.0, "husbandry_potential": 1.0, "recovery_potential": 1.0, "genetic_viability": 1.0, "institutional_significance": 1.0}}, {"taxa": "Fishes", "common": "Asir Garra", "latin": "Garra buettikeri", "raw": {"iucn_status": "Vulnerable (VU)", "population_state": "Vulnerable (<10000)", "trend_distribution": "Low", "husbandry_potential": "High", "recovery_potential": "High", "genetic_viability": "High", "institutional_significance": "High"}, "n": {"iucn_status": 0.5, "population_state": 0.333333, "trend_distribution": 0.0, "husbandry_potential": 1.0, "recovery_potential": 1.0, "genetic_viability": 1.0, "institutional_significance": 1.0}}, {"taxa": "Fishes", "common": "Coastal Garra", "latin": "Garra sahilia", "raw": {"iucn_status": "Least Concern (LC)", "population_state": "Vulnerable (<10000)", "trend_distribution": "Low", "husbandry_potential": "High", "recovery_potential": "High", "genetic_viability": "Medium", "institutional_significance": "High"}, "n": {"iucn_status": 0.0, "population_state": 0.333333, "trend_distribution": 0.0, "husbandry_potential": 1.0, "recovery_potential": 1.0, "genetic_viability": 0.5, "institutional_significance": 1.0}}, {"taxa": "Fishes", "common": "Hijaz Garra", "latin": "Garra tibanica", "raw": {"iucn_status": "Least Concern (LC)", "population_state": "Vulnerable (<10000)", "trend_distribution": "Low", "husbandry_potential": "High", "recovery_potential": "High", "genetic_viability": "Medium", "institutional_significance": "High"}, "n": {"iucn_status": 0.0, "population_state": 0.333333, "trend_distribution": 0.0, "husbandry_potential": 1.0, "recovery_potential": 1.0, "genetic_viability": 0.5, "institutional_significance": 1.0}}, {"taxa": "Fishes", "common": "Arabian Bream", "latin": "Acanthobrama hadiyahensis", "raw": {"iucn_status": "Critically Endangered (CR)", "population_state": "Extreme Risk (<250)", "trend_distribution": "Low", "husbandry_potential": "Medium", "recovery_potential": "Medium", "genetic_viability": "Low", "institutional_significance": "High"}, "n": {"iucn_status": 0.833333, "population_state": 1.0, "trend_distribution": 0.0, "husbandry_potential": 0.5, "recovery_potential": 0.5, "genetic_viability": 0.0, "institutional_significance": 1.0}}, {"taxa": "Fishes", "common": "Red sea killifish", "latin": "Aphaniops dispar", "raw": {"iucn_status": "Least Concern (LC)", "population_state": "Least Concern (>10000)", "trend_distribution": "High", "husbandry_potential": "High", "recovery_potential": "High", "genetic_viability": "High", "institutional_significance": "High"}, "n": {"iucn_status": 0.0, "population_state": 0.0, "trend_distribution": 1.0, "husbandry_potential": 1.0, "recovery_potential": 1.0, "genetic_viability": 1.0, "institutional_significance": 1.0}}, {"taxa": "Fishes", "common": "Arabian killifish", "latin": "Aphaniops stoliczkanus", "raw": {"iucn_status": "Least Concern (LC)", "population_state": "Least Concern (>10000)", "trend_distribution": "Low", "husbandry_potential": "High", "recovery_potential": "High", "genetic_viability": "High", "institutional_significance": "High"}, "n": {"iucn_status": 0.0, "population_state": 0.0, "trend_distribution": 0.0, "husbandry_potential": 1.0, "recovery_potential": 1.0, "genetic_viability": 1.0, "institutional_significance": 1.0}}, {"taxa": "Invertebrates", "common": "Not assigned", "latin": "Pseudagrion arabicum", "raw": {"iucn_status": "Endangered (EN)", "population_state": "High Risk (<2500)", "trend_distribution": "Low", "husbandry_potential": "Medium", "recovery_potential": "Low", "genetic_viability": "High", "institutional_significance": "Low"}, "n": {"iucn_status": 0.666667, "population_state": 0.666667, "trend_distribution": 0.0, "husbandry_potential": 0.5, "recovery_potential": 0.0, "genetic_viability": 1.0, "institutional_significance": 0.0}}, {"taxa": "Invertebrates", "common": "Pallid Spreadwing", "latin": "Lestes pallidus", "raw": {"iucn_status": "Vulnerable (VU)", "population_state": "Vulnerable (<10000)", "trend_distribution": "Low", "husbandry_potential": "Medium", "recovery_potential": "Low", "genetic_viability": "High", "institutional_significance": "Low"}, "n": {"iucn_status": 0.5, "population_state": 0.333333, "trend_distribution": 0.0, "husbandry_potential": 0.5, "recovery_potential": 0.0, "genetic_viability": 1.0, "institutional_significance": 0.0}}, {"taxa": "Invertebrates", "common": "Yemen Hawker", "latin": "Pinheyschna yemenensis", "raw": {"iucn_status": "Vulnerable (VU)", "population_state": "Vulnerable (<10000)", "trend_distribution": "Low", "husbandry_potential": "Medium", "recovery_potential": "Low", "genetic_viability": "High", "institutional_significance": "Low"}, "n": {"iucn_status": 0.5, "population_state": 0.333333, "trend_distribution": 0.0, "husbandry_potential": 0.5, "recovery_potential": 0.0, "genetic_viability": 1.0, "institutional_significance": 0.0}}, {"taxa": "Invertebrates", "common": "Otacilia hairtail", "latin": "Anthene otacilia", "raw": {"iucn_status": "Not Evaluated (NE)", "population_state": "Least Concern (>10000)", "trend_distribution": "Low", "husbandry_potential": "Medium", "recovery_potential": "Low", "genetic_viability": "High", "institutional_significance": "Medium"}, "n": {"iucn_status": 0.166667, "population_state": 0.0, "trend_distribution": 0.0, "husbandry_potential": 0.5, "recovery_potential": 0.0, "genetic_viability": 1.0, "institutional_significance": 0.5}}, {"taxa": "Invertebrates", "common": "Not assigned", "latin": "Euchrysops philbyi", "raw": {"iucn_status": "Not Evaluated (NE)", "population_state": "Least Concern (>10000)", "trend_distribution": "Low", "husbandry_potential": "Medium", "recovery_potential": "Low", "genetic_viability": "High", "institutional_significance": "Medium"}, "n": {"iucn_status": 0.166667, "population_state": 0.0, "trend_distribution": 0.0, "husbandry_potential": 0.5, "recovery_potential": 0.0, "genetic_viability": 1.0, "institutional_significance": 0.5}}, {"taxa": "Invertebrates", "common": "Not assigned", "latin": "Lepidochrysops haveni", "raw": {"iucn_status": "Not Evaluated (NE)", "population_state": "Least Concern (>10000)", "trend_distribution": "Low", "husbandry_potential": "Medium", "recovery_potential": "Low", "genetic_viability": "High", "institutional_significance": "Medium"}, "n": {"iucn_status": 0.166667, "population_state": 0.0, "trend_distribution": 0.0, "husbandry_potential": 0.5, "recovery_potential": 0.0, "genetic_viability": 1.0, "institutional_significance": 0.5}}, {"taxa": "Invertebrates", "common": "Pittaway\u2019s Giant Cupid", "latin": "Lepidochrysops pittawayi", "raw": {"iucn_status": "Not Evaluated (NE)", "population_state": "Least Concern (>10000)", "trend_distribution": "Low", "husbandry_potential": "Medium", "recovery_potential": "Low", "genetic_viability": "High", "institutional_significance": "Medium"}, "n": {"iucn_status": 0.166667, "population_state": 0.0, "trend_distribution": 0.0, "husbandry_potential": 0.5, "recovery_potential": 0.0, "genetic_viability": 1.0, "institutional_significance": 0.5}}, {"taxa": "Invertebrates", "common": "Gabriel's Pierrot", "latin": "Tuxentius gabrieli", "raw": {"iucn_status": "Not Evaluated (NE)", "population_state": "Least Concern (>10000)", "trend_distribution": "Low", "husbandry_potential": "Medium", "recovery_potential": "Low", "genetic_viability": "High", "institutional_significance": "Medium"}, "n": {"iucn_status": 0.166667, "population_state": 0.0, "trend_distribution": 0.0, "husbandry_potential": 0.5, "recovery_potential": 0.0, "genetic_viability": 1.0, "institutional_significance": 0.5}}, {"taxa": "Invertebrates", "common": "Tihama Scorpion", "latin": "Androctonus tihamicus", "raw": {"iucn_status": "Not Evaluated (NE)", "population_state": "Least Concern (>10000)", "trend_distribution": "Low", "husbandry_potential": "Medium", "recovery_potential": "Low", "genetic_viability": "High", "institutional_significance": "Medium"}, "n": {"iucn_status": 0.166667, "population_state": 0.0, "trend_distribution": 0.0, "husbandry_potential": 0.5, "recovery_potential": 0.0, "genetic_viability": 1.0, "institutional_significance": 0.5}}, {"taxa": "Invertebrates", "common": "The black scorpion", "latin": "Leiurus nigellus", "raw": {"iucn_status": "Not Evaluated (NE)", "population_state": "Least Concern (>10000)", "trend_distribution": "Low", "husbandry_potential": "Medium", "recovery_potential": "Low", "genetic_viability": "High", "institutional_significance": "Medium"}, "n": {"iucn_status": 0.166667, "population_state": 0.0, "trend_distribution": 0.0, "husbandry_potential": 0.5, "recovery_potential": 0.0, "genetic_viability": 1.0, "institutional_significance": 0.5}}, {"taxa": "Invertebrates", "common": "Hadb Scorpion", "latin": "Leiurus hadb", "raw": {"iucn_status": "Not Evaluated (NE)", "population_state": "Vulnerable (<10000)", "trend_distribution": "Low", "husbandry_potential": "Medium", "recovery_potential": "Low", "genetic_viability": "High", "institutional_significance": "Medium"}, "n": {"iucn_status": 0.166667, "population_state": 0.333333, "trend_distribution": 0.0, "husbandry_potential": 0.5, "recovery_potential": 0.0, "genetic_viability": 1.0, "institutional_significance": 0.5}}, {"taxa": "Invertebrates", "common": "Arabian Black Tarantula", "latin": "Satyrex arabicus", "raw": {"iucn_status": "Not Evaluated (NE)", "population_state": "High Risk (<2500)", "trend_distribution": "Low", "husbandry_potential": "Medium", "recovery_potential": "Medium", "genetic_viability": "High", "institutional_significance": "Medium"}, "n": {"iucn_status": 0.166667, "population_state": 0.666667, "trend_distribution": 0.0, "husbandry_potential": 0.5, "recovery_potential": 0.5, "genetic_viability": 1.0, "institutional_significance": 0.5}}];
+const CRIT = {
+  iucn_status: "IUCN", population_state: "Pop Size", trend_distribution: "Trend",
+  husbandry_potential: "Husbandry", recovery_potential: "Recovery",
+  genetic_viability: "Genetics", institutional_significance: "Institution"
+};
+const CKEYS = Object.keys(CRIT);
+const PALETTE = ["#8C3A1F","#C1502E","#D96E45","#E58E6D","#F0AE93","#F7CDBA","#A85A3B"];
+const STEP = 0.5, WMIN = 0, WMAX = 5;
+
+let weights = Object.fromEntries(CKEYS.map(c => [c, 1.0]));
+let taxaOn = new Set(DATA.map(d => d.taxa));
+let selected = null;
+
+// ---------- sidebar controls ----------
+const wbox = document.getElementById("weights");
+CKEYS.forEach(c => {
+  const div = document.createElement("div");
+  div.className = "wctl";
+  div.innerHTML = `<label>${CRIT[c]} <span class="val" id="v_${c}">1</span></label>
+    <input type="range" min="${WMIN}" max="${WMAX}" step="${STEP}" value="1" id="w_${c}">`;
+  wbox.appendChild(div);
+  div.querySelector("input").addEventListener("input", e => {
+    weights[c] = parseFloat(e.target.value);
+    document.getElementById("v_" + c).textContent = e.target.value;
+    render();
+  });
+});
+
+const taxaBox = document.getElementById("taxa");
+[...new Set(DATA.map(d => d.taxa))].sort().forEach(t => {
+  const l = document.createElement("label");
+  l.innerHTML = `<input type="checkbox" checked value="${t}"> ${t}`;
+  taxaBox.appendChild(l);
+  l.querySelector("input").addEventListener("change", e => {
+    e.target.checked ? taxaOn.add(t) : taxaOn.delete(t);
+    render(true);
+  });
+});
+
+document.getElementById("speciesSel").addEventListener("change", e => {
+  selected = e.target.value; render();
+});
+
+// ---------- scoring ----------
+function normWeights(w) {
+  const s = CKEYS.reduce((a, c) => a + w[c], 0);
+  const out = {};
+  CKEYS.forEach(c => out[c] = s > 0 ? w[c] / s : 1 / CKEYS.length);
+  return out;
+}
+function rankAll(pool, w) {
+  const nw = normWeights(w);
+  const rows = pool.map(d => ({
+    ...d, score: CKEYS.reduce((a, c) => a + d.n[c] * nw[c], 0)
+  }));
+  rows.sort((a, b) => b.score - a.score);
+  let last = null, lastRank = 0;
+  rows.forEach((r, i) => {
+    r.rank = (last !== null && Math.abs(r.score - last) < 1e-12) ? lastRank : i + 1;
+    last = r.score; lastRank = r.rank;
+  });
+  return rows;
+}
+function rankOf(pool, w, latin) {
+  return rankAll(pool, w).find(r => r.latin === latin).rank;
+}
+
+// ---------- render ----------
+function render(refillSpecies) {
+  const pool = DATA.filter(d => taxaOn.has(d.taxa));
+  const ranked = rankAll(pool, weights);
+  if (!ranked.length) return;
+  if (!selected || !ranked.some(r => r.latin === selected)) selected = ranked[0].latin;
+
+  const sel = document.getElementById("speciesSel");
+  if (refillSpecies || sel.options.length !== ranked.length) {
+    sel.innerHTML = ranked.map(r =>
+      `<option value="${r.latin}">${r.latin} — ${r.common}</option>`).join("");
+  }
+  sel.value = selected;
+
+  const me = ranked.find(r => r.latin === selected);
+  const nw = normWeights(weights);
+
+  // --- ranking bars (top 25) ---
+  const top = ranked.slice(0, Math.min(25, ranked.length));
+  const maxS = top[0].score || 1;
+  document.getElementById("ranking").innerHTML = top.map(r => `
+    <div class="rrow ${r.latin === selected ? "sel" : ""}" data-l="${r.latin}">
+      <div class="lbl" title="${r.common}">${r.latin}</div>
+      <div class="track"><div class="bar" style="width:${(100 * r.score / maxS).toFixed(1)}%"></div></div>
+      <div class="sc">${r.score.toFixed(3)}</div>
+    </div>`).join("");
+  document.querySelectorAll(".rrow").forEach(el =>
+    el.addEventListener("click", () => { selected = el.dataset.l; render(); }));
+
+  document.getElementById("rankMetric").innerHTML =
+    `#${me.rank} of ${ranked.length} <span style="font-size:13px;color:#888">(score ${me.score.toFixed(3)})</span>`;
+
+  ["sigName","sensName","compName"].forEach(id =>
+    document.getElementById(id).textContent = selected);
+
+  // --- Criterion Signature: species dots vs pool-mean hollow markers ---
+  const poolMean = {};
+  CKEYS.forEach(c =>
+    poolMean[c] = pool.reduce((a, d) => a + d.n[c], 0) / pool.length);
+
+  const SX0 = 120, SXW = 310;
+  const sX = v => SX0 + v * SXW;
+  let sig = "";
+  // vertical gridlines
+  [0, 0.25, 0.5, 0.75, 1].forEach(v => {
+    sig += `<line x1="${sX(v)}" y1="12" x2="${sX(v)}" y2="200" stroke="#f0f0f0"/>
+            <text x="${sX(v)}" y="214" text-anchor="middle" font-size="10" fill="#888">${v}</text>`;
+  });
+  CKEYS.forEach((c, i) => {
+    const y = 24 + i * 26;
+    sig += `<text x="112" y="${y+4}" text-anchor="end" font-size="12">${CRIT[c]}</text>
+      <line x1="${SX0}" y1="${y}" x2="${SX0+SXW}" y2="${y}" stroke="#eee"/>
+      <circle cx="${sX(poolMean[c])}" cy="${y}" r="4.5" fill="none"
+              stroke="#999" stroke-width="1.5">
+        <title>Pool mean ${CRIT[c]}: ${poolMean[c].toFixed(2)}</title></circle>
+      <line x1="${sX(poolMean[c])}" y1="${y}" x2="${sX(me.n[c])}" y2="${y}"
+            stroke="#E58E6D" stroke-width="1.5" opacity="0.6"/>
+      <circle cx="${sX(me.n[c])}" cy="${y}" r="6" fill="#C1502E">
+        <title>${CRIT[c]}: ${me.raw[c]} → ${me.n[c].toFixed(2)}</title></circle>`;
+  });
+  sig += `<text x="${SX0 + SXW/2}" y="232" text-anchor="middle" font-size="11" fill="#666">Standardized value (0–1)</text>
+    <circle cx="${SX0+8}" cy="244" r="4.5" fill="#C1502E"/>
+    <text x="${SX0+16}" y="248" font-size="10.5" fill="#666">species</text>
+    <circle cx="${SX0+78}" cy="244" r="4" fill="none" stroke="#999" stroke-width="1.5"/>
+    <text x="${SX0+86}" y="248" font-size="10.5" fill="#666">pool mean</text>`;
+  document.getElementById("signature").innerHTML = sig;
+
+  // --- Rank Sensitivity: one-notch nudges in BOTH directions, local to current weights ---
+  const sens = CKEYS.map(c => {
+    let dUp = null, dDn = null;
+    const wu = Math.min(WMAX, weights[c] + STEP);
+    if (wu !== weights[c]) {
+      const w2 = { ...weights }; w2[c] = wu;
+      dUp = me.rank - rankOf(pool, w2, selected);   // positive = improvement
+    }
+    const wd = Math.max(WMIN, weights[c] - STEP);
+    if (wd !== weights[c]) {
+      const w2 = { ...weights }; w2[c] = wd;
+      dDn = me.rank - rankOf(pool, w2, selected);
+    }
+    const mag = Math.max(Math.abs(dUp ?? 0), Math.abs(dDn ?? 0));
+    return { c, dUp, dDn, mag };
+  }).sort((a, b) => b.mag - a.mag);
+
+  const span = Math.max(2, ...sens.map(x => x.mag));
+  const ZX = 275, XR = 150;
+  const X = d => ZX + (d / span) * XR;
+  let sv = `<line x1="${ZX}" y1="10" x2="${ZX}" y2="200" stroke="#ccc"/>`;
+  sens.forEach((x, i) => {
+    const y = 24 + i * 26;
+    sv += `<text x="115" y="${y+4}" text-anchor="end" font-size="12"
+             font-weight="${i === 0 ? "bold" : "normal"}">${CRIT[x.c]}</text>`;
+    if (x.dDn !== null)
+      sv += `<line x1="${ZX}" y1="${y}" x2="${X(x.dDn)}" y2="${y}" stroke="#ccc" stroke-width="2"/>
+        <circle cx="${X(x.dDn)}" cy="${y}" r="5" fill="#fff" stroke="#8C3A1F" stroke-width="1.8">
+          <title>${CRIT[x.c]} −0.5 → Δ ${x.dDn >= 0 ? "+" + x.dDn : x.dDn}</title></circle>`;
+    if (x.dUp !== null)
+      sv += `<line x1="${ZX}" y1="${y}" x2="${X(x.dUp)}" y2="${y}" stroke="#E58E6D" stroke-width="2"/>
+        <circle cx="${X(x.dUp)}" cy="${y}" r="5.5" fill="#C1502E">
+          <title>${CRIT[x.c]} +0.5 → Δ ${x.dUp >= 0 ? "+" + x.dUp : x.dUp}</title></circle>`;
+  });
+  sv += [-span, 0, span].map(v =>
+    `<text x="${X(v)}" y="216" text-anchor="middle" font-size="10" fill="#888">${v > 0 ? "+" + v : v}</text>`).join("");
+  sv += `<text x="${ZX}" y="232" text-anchor="middle" font-size="11" fill="#666">Δ Rank (positive = improvement)</text>
+    <circle cx="130" cy="246" r="5" fill="#C1502E"/>
+    <text x="138" y="250" font-size="10.5" fill="#666">dial +0.5</text>
+    <circle cx="200" cy="246" r="4.5" fill="#fff" stroke="#8C3A1F" stroke-width="1.8"/>
+    <text x="209" y="250" font-size="10.5" fill="#666">dial −0.5</text>`;
+  document.getElementById("sensitivity").innerHTML = sv;
+
+  // --- Risk Composition ---
+  const contribs = CKEYS.map(c => ({ c, v: me.n[c] * nw[c] })).sort((a, b) => b.v - a.v);
+  const tot = contribs.reduce((a, x) => a + x.v, 0) || 1;
+  document.getElementById("stack").innerHTML = contribs.map((x, i) =>
+    `<div style="width:${(100*x.v/tot).toFixed(2)}%;background:${PALETTE[i%7]}"
+      title="${CRIT[x.c]}: ${(100*x.v/tot).toFixed(0)}%"></div>`).join("");
+  document.getElementById("legend").innerHTML = contribs.map((x, i) =>
+    `<span style="--sw:${PALETTE[i%7]}">${CRIT[x.c]} ${(100*x.v/tot).toFixed(0)}%</span>`).join("");
+
+  // --- table ---
+  document.getElementById("count").textContent = ranked.length;
+  document.getElementById("tbl").innerHTML =
+    `<tr><th>Rank</th><th>Common name</th><th>Latin name</th><th>Taxa</th><th>Score</th>${
+      CKEYS.map(c => `<th>${CRIT[c]}</th>`).join("")}</tr>` +
+    ranked.map(r => `<tr><td>${r.rank}</td><td>${r.common}</td><td><i>${r.latin}</i></td>
+      <td>${r.taxa}</td><td>${r.score.toFixed(3)}</td>${
+      CKEYS.map(c => `<td>${r.raw[c]}</td>`).join("")}</tr>`).join("");
+
+  window._ranked = ranked;
+}
+
+document.getElementById("dl").addEventListener("click", () => {
+  const esc = s => `"${String(s).replace(/"/g, '""')}"`;
+  const head = ["rank","common_name","latin_name","taxa","score", ...CKEYS];
+  const lines = [head.join(",")].concat(window._ranked.map(r =>
+    [r.rank, esc(r.common), esc(r.latin), r.taxa, r.score.toFixed(4),
+     ...CKEYS.map(c => esc(r.raw[c]))].join(",")));
+  const blob = new Blob([lines.join("\n")], { type: "text/csv" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "ranked_species.csv";
+  a.click();
+});
+
+render(true);
+</script>
+</body>
+</html>
