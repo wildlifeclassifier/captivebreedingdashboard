@@ -45,7 +45,12 @@
     box-shadow: 0 4px 6px rgba(0,0,0,0.1);
   }
   button:hover { background: #D96E45; }
-  .cols { display: flex; gap: 16px; flex-wrap: wrap; }
+  .cols { display: flex; gap: 16px; flex-wrap: wrap; align-items: flex-start; }
+  .rankcard { display: flex; flex-direction: column; overflow: hidden; }
+  #ranking { flex: 1; min-height: 0; overflow-y: auto; padding-right: 6px; }
+  #ranking::-webkit-scrollbar { width: 8px; }
+  #ranking::-webkit-scrollbar-thumb { background: #ddd; border-radius: 4px; }
+  #ranking::-webkit-scrollbar-thumb:hover { background: #ccc; }
   .rrow { display: flex; align-items: center; gap: 8px; margin: 2px 0; cursor: pointer; }
   .rrow .lbl { width: 210px; text-align: right; font-style: italic; font-size: 12px;
                white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -102,12 +107,12 @@
 
   <div class="main">
     <div class="cols">
-      <div class="card" style="flex:1.2;min-width:380px">
+      <div class="card rankcard" style="flex:1.2;min-width:380px">
         <h3>Species Ranking</h3>
-        <p class="sub">Weighted composite of standardized criteria. Click a bar to inspect that species.</p>
+        <p class="sub">Weighted composite of standardized criteria. All species shown — scroll for more. Click a bar to inspect.</p>
         <div id="ranking"></div>
       </div>
-      <div style="flex:1;min-width:360px">
+      <div id="rightcol" style="flex:1;min-width:360px">
         <div class="card">
           <h3>Criterion Signature — <em id="sigName"></em></h3>
           <p class="sub">Species profile on the standardized 0–1 scale (e.g., IUCN 0–6 → 0–1).
@@ -177,7 +182,7 @@ const taxaBox = document.getElementById("taxa");
 });
 
 document.getElementById("speciesSel").addEventListener("change", e => {
-  selected = e.target.value; render();
+  selected = e.target.value; window._scrollToSel = true; render();
 });
 
 // ---------- scoring ----------
@@ -221,15 +226,22 @@ function render(refillSpecies) {
   const me = ranked.find(r => r.latin === selected);
   const nw = normWeights(weights);
 
-  // --- ranking bars (top 25) ---
-  const top = ranked.slice(0, Math.min(25, ranked.length));
-  const maxS = top[0].score || 1;
-  document.getElementById("ranking").innerHTML = top.map(r => `
+  // --- ranking bars (all species; container scrolls within fixed panel) ---
+  const rbox = document.getElementById("ranking");
+  const prevScroll = rbox.scrollTop;
+  const maxS = ranked[0].score || 1;
+  rbox.innerHTML = ranked.map(r => `
     <div class="rrow ${r.latin === selected ? "sel" : ""}" data-l="${r.latin}">
       <div class="lbl" title="${r.common}">${r.latin}</div>
       <div class="track"><div class="bar" style="width:${(100 * r.score / maxS).toFixed(1)}%"></div></div>
       <div class="sc">${r.score.toFixed(3)}</div>
     </div>`).join("");
+  rbox.scrollTop = prevScroll;
+  if (window._scrollToSel) {
+    const selEl = rbox.querySelector(".rrow.sel");
+    if (selEl) selEl.scrollIntoView({ block: "nearest" });
+    window._scrollToSel = false;
+  }
   document.querySelectorAll(".rrow").forEach(el =>
     el.addEventListener("click", () => { selected = el.dataset.l; render(); }));
 
@@ -349,6 +361,20 @@ document.getElementById("dl").addEventListener("click", () => {
 });
 
 render(true);
+
+// --- pin the ranking panel's height to the right column so the bar list
+// scrolls internally instead of growing the page ---
+function syncPanelHeight() {
+  const card = document.querySelector(".rankcard");
+  const rc = document.getElementById("rightcol");
+  if (!card || !rc) return;
+  const sideBySide = Math.abs(card.offsetTop - rc.offsetTop) < 5;
+  const h = rc.offsetHeight;
+  card.style.height = (sideBySide && h > 200) ? h + "px" : "620px";
+}
+syncPanelHeight();
+window.addEventListener("resize", syncPanelHeight);
+new ResizeObserver(syncPanelHeight).observe(document.getElementById("rightcol"));
 </script>
 </body>
 </html>
